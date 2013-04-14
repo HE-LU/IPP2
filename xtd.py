@@ -11,6 +11,7 @@ import xml.etree.ElementTree as ET
 #------------------- GLOBALS -------------------
 type_values_table = {"NONE":0, "BIT":1, "INT":2, "FLOAT":3, "NTEXT":4, "NVARCHAR":4}
 parsed_tree = {}
+parsed_g_tree = {}
 counter_list = {}
 #------------------- GLOBALS -------------------
 
@@ -81,6 +82,7 @@ def fwrite(f_out,msg):
   return
 
 def parse_xml(root):
+  root.tag = root.tag.lower()
   # -------------------- Create new {} in parsed_tree
   if not parsed_tree.has_key(root.tag):
     parsed_tree[root.tag]={}
@@ -96,7 +98,6 @@ def parse_xml(root):
   # ----------------------------------------
   for child in root:
     have_childs = 1
-    child.tag = child.tag.lower()
     if not args.a:
       # -------------------- Now add all these attributes :)!
       for atr,atr_val in root.items():
@@ -123,23 +124,23 @@ def parse_xml(root):
         parsed_tree[root.tag][child.tag][0] = counter_list[root.tag][child.tag]
       else:
         parsed_tree[root.tag][child.tag][0] = 1
+        counter_list[root.tag][child.tag] = 1
+
       parsed_tree[root.tag][child.tag][1] = "INT"
       parsed_tree[root.tag][child.tag][2] = "_id"
-      
+
       if parsed_tree[root.tag][child.tag][0] >= int(args.etc) and args.etc != "-1":
         make_etc_elements(root.tag, child.tag)
   # ----------------------------------------
   # -------------------- If he dont have childs!
   # ----------------------------------------
   if not have_childs:
-    root.tag = root.tag.lower()
     if root.tag not in parsed_tree[root.tag]:
       # -------------------- Create new instance for root.tag, only if its empty!
-      if parsed_tree[root.tag].keys() == []:
-        parsed_tree[root.tag]["value"]=[1,"NONE",""]
-        parsed_tree[root.tag]["value"][0] = 1
-        parsed_tree[root.tag]["value"][1] = get_type("NONE", root.text, 0) # 0 cuz not attribute
-        parsed_tree[root.tag]["value"][2] = ""
+      parsed_tree[root.tag]["value"]=[1,"NONE",""]
+      parsed_tree[root.tag]["value"][0] = 1
+      parsed_tree[root.tag]["value"][1] = get_type("NONE", root.text, 0) # 0 cuz not attribute
+      parsed_tree[root.tag]["value"][2] = ""
     else:
       # -------------------- If root.tag already exist, check his type!
       parsed_tree[root.tag][child.tag][1] = get_type("NONE", root.text, 0) # 0 cuz not attribute
@@ -152,6 +153,8 @@ def parse_xml(root):
         parsed_tree[root.tag][atr][0] = 1
         parsed_tree[root.tag][atr][1] = get_type("NONE", atr_val, 1) # Numba one for attribute! Hurray!
         parsed_tree[root.tag][atr][2] = ""
+    if parsed_tree[root.tag].keys() != ["value"]:
+      del parsed_tree[root.tag]["value"]
     
   # ------------------ recursive call for all elements
   for child in root:
@@ -182,8 +185,12 @@ if __name__ == '__main__':
   args = parser.parse_args()
   if args.g!=0 or args.b!=0 or args.a!=0 or args.etc!=-1 or args.header!="":
     if args.h == 1:
-      print("nepouzivej nic s napovedou vole")
+      print("Help with other attributes set! You failed!")
       sys.exit(90)
+  
+  if args.b!=0 and args.etc!="-1":
+    print("Attribute B set, and etc is set also... I don't like it!")
+    sys.exit(90)
   
   if not is_int(args.etc):
     print("ETC is not a number!")
@@ -205,10 +212,10 @@ if __name__ == '__main__':
   if root.tag != "catalog":
     print("Nespravne XML!")
     sys.exit(90)
-    
+      
   for child in root:
     parse_xml(child)
-  
+    
   #------------------------
   #---------- XML ----------
   #------------------------
@@ -261,7 +268,13 @@ if __name__ == '__main__':
   #------------------------
   #+++++++++++ G Write +++++++++++++
   #------------------------
+
   if not args.b and args.g:
+    if args.header!="":
+      fwrite(f_out,"--"+args.header)
+      
+      
+  if args.b and args.g:
     if args.header!="":
       fwrite(f_out,"--"+args.header)
   #------------------------
