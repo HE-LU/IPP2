@@ -12,14 +12,20 @@ import xml.etree.ElementTree as ET
 type_values_table = {"NONE":0, "BIT":1, "INT":2, "FLOAT":3, "NTEXT":4, "NVARCHAR":4}
 parsed_tree = {}
 counter_list = {}
-args = '';
 #------------------- GLOBALS -------------------
 
 #------------------- get_type -------------------
 def get_type(actual_type, text, attrib):
   
+  if text == None:
+    return "BIT"
+  tmp = text
+  tmp = ''.join(tmp.split())
+  if tmp == "":
+    return "INT"
+  
   new_type = "NONE"
-  if text == 0 or text == 1 or text == "true" or text == "false":
+  if text == 0 or text == 1 or text == "true" or text == "false"or text == "True" or text == "False":
     new_type = "BIT"
   elif is_int(text):
     new_type = "INT"
@@ -36,7 +42,7 @@ def get_type(actual_type, text, attrib):
   
   if type_values_table[new_type] < type_values_table[actual_type]:
     new_type = actual_type
-    
+
   return new_type
 
 def is_int(string):
@@ -57,17 +63,20 @@ def is_float(string):
 #------------------ PARSE_XML -------------------
 
 def make_etc_elements(root, child):
-  for i in range(1, int(args.etc)):
-    del parsed_tree[root][child+str(i)+"_id"]
+  del parsed_tree[root][child]
   
-  if int(args.etc) == 1:
-    del parsed_tree[root][child+"1_id"]
-    
   if not parsed_tree.has_key(child):
     parsed_tree[child]={}
   
-  parsed_tree[child][root+"_id"] = "INT" 
+  parsed_tree[child][root] = [1,"INT","_id"] 
   counter_list[root][child] = -1
+  return
+
+def fwrite(f_out,msg):
+  if args.output != sys.stdout:
+    f_out.write(msg)
+  else:
+    sys.stdout.write(msg)
   
   return
 
@@ -79,71 +88,74 @@ def parse_xml(root):
   # -------------------- Create new {} in counter_list
   if not counter_list.has_key(root.tag):
     counter_list[root.tag]={}
+    
+  have_childs=0
   
-  have_childs = 0
-  # -------------------- loop for each child in root
+  # ----------------------------------------
+  # -------------------- If he have childs!
+  # ----------------------------------------
   for child in root:
     have_childs = 1
-    
-    # ------------------- if new value!
-    if child not in parsed_tree[root.tag]:
-      if child.tag in counter_list[root.tag]:      
-        # ---------------- if more than one of same name, count it!
-        
-        if counter_list[root.tag][child.tag] != -1:
-          if counter_list[root.tag][child.tag] == 1:
-            parsed_tree[root.tag][child.tag+'1' + "_id"] = parsed_tree[root.tag].pop(child.tag+"_id")
-          
-          counter_list[root.tag][child.tag] = counter_list[root.tag][child.tag]+1
-          if counter_list[root.tag][child.tag] >= int(args.etc):
-            make_etc_elements(root.tag, child.tag)
-          else:
-            pom_child = child.tag + str(counter_list[root.tag][child.tag]) + "_id"      
-            parsed_tree[root.tag][pom_child] = "INT"
-      else:
-        pom_child = child.tag + "_id"
-        counter_list[root.tag][child.tag] = 1     
-        parsed_tree[root.tag][pom_child] = "INT"
-        
-      # ---------------- add attributes if set!
-      if not args.a:
-        for atr,atr_val in root.items():
-          parsed_tree[root.tag][atr] = get_type("NONE", atr_val, 1) # Numba one for attribute!
-          
-    # ------------------- if existing value found, update!
-    else:
-      print("UPDATE?")
-      actual_type = parsed_tree[root.tag][pom_child]
-      parsed_tree[root.tag][pom_child] = get_type(actual_type, child.text, 0) # 0 cuz not attribute
-      # ---------------- update attributes if set!
-      if not args.a:
-        for atr,atr_val in root.items():
-          actual_type = parsed_tree[root.tag][atr]
-          parsed_tree[root.tag][atr] = get_type(actual_type, atr_val, 1) # Numba one for attribute!
-
-  # ------------------- if root element have no chield!
-  if not have_childs:
-    pom_child = "value"
-    # ------------------- should we do update?!
-    if root not in parsed_tree[root.tag]:
-      parsed_tree[root.tag][pom_child] = get_type("NONE", root.text, 0) # 0 cuz not attribute
-    else:
-      actual_type = parsed_tree[root.tag][pom_child]
-      parsed_tree[root.tag][pom_child] = get_type(actual_type, root.text, 0) # 0 cuz not attribute
-    
-    # ---------------- do attributes if set!
+    child.tag = child.tag.lower()
     if not args.a:
-      for atr in root.attrib:
-        # ---------------- update attributes if set!
-        if atr not in parsed_tree[root.tag]:
-          parsed_tree[root.tag][atr] = get_type("NONE", atr, 1) # Numba one for attribute!
-        else:
-          actual_type = parsed_tree[root.tag][atr]
-          parsed_tree[root.tag][atr] = get_type(actual_type, atr, 1) # Numba one for attribute!
-
+      # -------------------- Now add all these attributes :)!
+      for atr,atr_val in root.items():
+        atr = atr.lower()
+        parsed_tree[root.tag][atr]=[0,"NONE",""]
+        parsed_tree[root.tag][atr][0] = 1
+        parsed_tree[root.tag][atr][1] = get_type("NONE", atr_val, 1) # Numba one for attribute! Hurray!
+        parsed_tree[root.tag][atr][2] = ""
+        
+    if child.tag not in parsed_tree[root.tag]:
+      # -------------------- If child.tag is new.
+      if child.tag in counter_list[root.tag]:
+        if counter_list[root.tag][child.tag] == -1:
+          continue
+      counter_list[root.tag][child.tag] = 1     
+      parsed_tree[root.tag][child.tag]=[1,"NONE",""]
+      parsed_tree[root.tag][child.tag][0] = 1
+      parsed_tree[root.tag][child.tag][1] = "INT"
+      parsed_tree[root.tag][child.tag][2] = "_id"
+    else:
+      # -------------------- If child.tag already exist, change number of them!
+      if child.tag in counter_list[root.tag]: 
+        counter_list[root.tag][child.tag] = counter_list[root.tag][child.tag] + 1    
+        parsed_tree[root.tag][child.tag][0] = counter_list[root.tag][child.tag]
+      else:
+        parsed_tree[root.tag][child.tag][0] = 1
+      parsed_tree[root.tag][child.tag][1] = "INT"
+      parsed_tree[root.tag][child.tag][2] = "_id"
+      
+      if parsed_tree[root.tag][child.tag][0] >= int(args.etc) and args.etc != "-1":
+        make_etc_elements(root.tag, child.tag)
+  # ----------------------------------------
+  # -------------------- If he dont have childs!
+  # ----------------------------------------
+  if not have_childs:
+    root.tag = root.tag.lower()
+    if root.tag not in parsed_tree[root.tag]:
+      # -------------------- Create new instance for root.tag, only if its empty!
+      if parsed_tree[root.tag].keys() == []:
+        parsed_tree[root.tag]["value"]=[1,"NONE",""]
+        parsed_tree[root.tag]["value"][0] = 1
+        parsed_tree[root.tag]["value"][1] = get_type("NONE", root.text, 0) # 0 cuz not attribute
+        parsed_tree[root.tag]["value"][2] = ""
+    else:
+      # -------------------- If root.tag already exist, check his type!
+      parsed_tree[root.tag][child.tag][1] = get_type("NONE", root.text, 0) # 0 cuz not attribute
+      parsed_tree[root.tag][child.tag][2] = "_id"
+    if not args.a:
+      # -------------------- Now add all these attributes :)!
+      for atr,atr_val in root.items():
+        atr = atr.lower()
+        parsed_tree[root.tag][atr]=[0,"NONE",""]
+        parsed_tree[root.tag][atr][0] = 1
+        parsed_tree[root.tag][atr][1] = get_type("NONE", atr_val, 1) # Numba one for attribute! Hurray!
+        parsed_tree[root.tag][atr][2] = ""
+    
   # ------------------ recursive call for all elements
   for child in root:
-    parse_xml(child)   
+    parse_xml(child) 
   
   # ------------------ remove root element after each recursive call
   del counter_list[root.tag]
@@ -156,20 +168,22 @@ if __name__ == '__main__':
   #------------------------
   #+++++++++++++ ARGS ++++++++++++
   #------------------------
-  parser = argparse.ArgumentParser(description='XML2DDL by XHERMA25')         
+  parser = argparse.ArgumentParser(description='XML2DDL by XHERMA25',add_help=False)         
   parser.add_argument('--input', dest='input', default=sys.stdin, help='Input file with xml')
   parser.add_argument('--output', dest='output', default=sys.stdout, help='Output file with xml')
   parser.add_argument('--header', dest='header', default="", help='Header included on the top of the output')
-  parser.add_argument('--etc', dest='etc', default=-1, help='Maximal number of columns from the same element type')
-  parser.add_argument('-a', dest='a', default=0, help='Columns from attributes is not created')
-  parser.add_argument('-b', dest='b', default=0, help='More same elements seem like one')
-  parser.add_argument('-g', dest='g', default=0, help='XML with relations are on the output')
-                    
+  parser.add_argument('--etc', dest='etc', default="-1", help='Maximal number of columns from the same element type')
+  parser.add_argument('-a', action='store_true', dest='a', default=0, help='Columns from attributes is not created')
+  parser.add_argument('-b', action='store_true', dest='b', default=0, help='More same elements seem like one')
+  parser.add_argument('-g', action='store_true', dest='g', default=0, help='XML with relations are on the output')
+  parser.add_argument('-h', action='store_true', dest='h', default=0, help='Print this help')
+  parser.add_argument('--help', action='store_true', dest='h', default=0, help='Print this help')
+  
   args = parser.parse_args()
-  #if args.g!=0 or args.b!=0 or args.a!=0 or args.etc!=-1 or args.header!="":
-    #if args.h == 1:
-      #print("nepouzivej nic s napovedou vole")
-      #sys.exit(90)
+  if args.g!=0 or args.b!=0 or args.a!=0 or args.etc!=-1 or args.header!="":
+    if args.h == 1:
+      print("nepouzivej nic s napovedou vole")
+      sys.exit(90)
   
   if not is_int(args.etc):
     print("ETC is not a number!")
@@ -192,18 +206,69 @@ if __name__ == '__main__':
     print("Nespravne XML!")
     sys.exit(90)
     
-  print("Ok lets parse it!")  
   for child in root:
     parse_xml(child)
-  
-  print("");
-  print("");
-  for key, value in parsed_tree.items():
-    for key2, value2 in parsed_tree[key].items():
-      print("["+key+"] - ["+key2+"]\t-\t["+value2+"]")
   
   #------------------------
   #---------- XML ----------
   #------------------------
+  
+  if args.output != sys.stdout:
+    f_out = open(args.output,"w")
+  else:
+    f_out = None
+  #------------------------
+  #++++++++++ Normal Write +++++++++
+  #------------------------
+  if not args.b and not args.g:
+    if args.header!="":
+      fwrite(f_out,"--"+args.header+"\n\n")
+      
+    for key, value in parsed_tree.items():
+      fwrite(f_out,"CREATE TABLE "+key+"(\n")
+      fwrite(f_out,"\tprk_"+key+"_id INT PRIMARY KEY")
+      for key2, value2 in parsed_tree[key].items():     
+        if value2[0] <= 1:
+          fwrite(f_out,",\n\t")
+          fwrite(f_out,key2+value2[2]+" "+value2[1])
+        else:
+          for i in range(1,value2[0]+1):
+            fwrite(f_out,",\n\t")
+            fwrite(f_out,key2+str(i)+value2[2]+" "+value2[1])
+      fwrite(f_out,"\n);\n\n")
+  #------------------------
+  #------- Normal Write -------
+  #------------------------
+  
+  #------------------------
+  #++++++++++ B Write +++++++++++++
+  #------------------------
+  if args.b and not args.g:
+    if args.header!="":
+      fwrite(f_out,"--"+args.header)
+    
+    for key, value in parsed_tree.items():
+      fwrite(f_out,"CREATE TABLE "+key+"(\n")
+      fwrite(f_out,"\tprk_"+key+"_id INT PRIMARY KEY")
+      for key2, value2 in parsed_tree[key].items():     
+        fwrite(f_out,",\n\t")
+        fwrite(f_out,key2+value2[2]+" "+value2[1])
+      fwrite(f_out,"\n);\n\n")      
+  #------------------------
+  #-------- B Write ----------
+  #------------------------
+  
+  #------------------------
+  #+++++++++++ G Write +++++++++++++
+  #------------------------
+  if not args.b and args.g:
+    if args.header!="":
+      fwrite(f_out,"--"+args.header)
+  #------------------------
+  #-------- G Write ----------
+  #------------------------
+  
+  if args.output != sys.stdout:
+    f_out.close() 
   
 #--------------------- MAIN --------------------
