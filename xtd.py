@@ -61,18 +61,21 @@ def is_float(string):
     return False
 #------------------- get_type -------------------
 
-#------------------ PARSE_XML -------------------
 
+
+#-------------- MAKE_ETC_ELEMENTS ---------------
 def make_etc_elements(root, child):
   del parsed_tree[root][child]
   
-  if not parsed_tree.has_key(child):
+  if child not in parsed_tree:
     parsed_tree[child]={}
   
   parsed_tree[child][root] = [1,"INT","_id"] 
   counter_list[root][child] = -1
   return
+#-------------- MAKE_ETC_ELEMENTS ---------------
 
+#------------------ FWRITE -------------------
 def fwrite(f_out,msg):
   if args.output != sys.stdout:
     f_out.write(msg)
@@ -80,15 +83,17 @@ def fwrite(f_out,msg):
     sys.stdout.write(msg)
   
   return
+#------------------ FWRITE -------------------
 
+#------------------ PARSE_XML -------------------
 def parse_xml(root):
   root.tag = root.tag.lower()
   # -------------------- Create new {} in parsed_tree
-  if not parsed_tree.has_key(root.tag):
+  if root.tag not in parsed_tree:
     parsed_tree[root.tag]={}
   
   # -------------------- Create new {} in counter_list
-  if not counter_list.has_key(root.tag):
+  if root.tag not in counter_list:
     counter_list[root.tag]={}
     
   have_childs=0
@@ -135,7 +140,7 @@ def parse_xml(root):
   # -------------------- If he dont have childs!
   # ----------------------------------------
   if not have_childs:
-    if root.tag not in parsed_tree[root.tag]:
+    if root.text not in parsed_tree[root.tag]:
       # -------------------- Create new instance for root.tag, only if its empty!
       parsed_tree[root.tag]["value"]=[1,"NONE",""]
       parsed_tree[root.tag]["value"][0] = 1
@@ -153,8 +158,9 @@ def parse_xml(root):
         parsed_tree[root.tag][atr][0] = 1
         parsed_tree[root.tag][atr][1] = get_type("NONE", atr_val, 1) # Numba one for attribute! Hurray!
         parsed_tree[root.tag][atr][2] = ""
-    if parsed_tree[root.tag].keys() != ["value"]:
-      del parsed_tree[root.tag]["value"]
+    # nasledujici podminka je uplna blbost...
+    #if parsed_tree[root.tag].keys() != ["value"]:
+      #del parsed_tree[root.tag]["value"]
     
   # ------------------ recursive call for all elements
   for child in root:
@@ -166,6 +172,53 @@ def parse_xml(root):
   return
 #------------------ PARSE_XML -------------------
 
+#------------------ PARSE_G_TREE -------------------
+def parse_g_tree():
+  
+  for root in parsed_tree:
+    parsed_g_tree[root] = {}
+    for child in parsed_tree:
+      parsed_g_tree[root][child] = "0:0"
+      
+  for root in parsed_tree:
+    for child in parsed_tree[root]:
+      if parsed_tree[root][child][2] == "_id":
+        parsed_g_tree[root][child] = "N:1"
+        parsed_g_tree[child][root] = "1:N"
+        parsed_g_tree[root][root] = "1:1"
+        parsed_g_tree[child][child] = "1:1"
+  
+  change = 1
+  while change:
+    change = 0
+    for root in parsed_g_tree:
+      for child in parsed_g_tree[root]:
+        if parsed_g_tree[root][child] == "N:1":
+          for child2 in parsed_g_tree[child]:
+            if parsed_g_tree[child][child2] == "N:1":
+              if parsed_g_tree[root][child2] != "N:1":
+                parsed_g_tree[root][child2] = "N:1"
+                change = 1
+  
+  change = 1
+  while change:
+    change = 0
+    for root in parsed_g_tree:
+      for child in parsed_g_tree[root]:
+        if parsed_g_tree[root][child] == "1:N":
+          for child2 in parsed_g_tree[child]:
+            if parsed_g_tree[child][child2] == "1:N":
+              if parsed_g_tree[root][child2] != "1:N":
+                parsed_g_tree[root][child2] = "1:N"
+                change = 1
+  
+  for root in parsed_g_tree:
+    for child in parsed_g_tree[root]:
+      if parsed_g_tree[root][child] == "0:0":
+        parsed_g_tree[root][child] = "N:M"
+  return
+#------------------ PARSE_G_TREE -------------------
+  
 #--------------------- MAIN --------------------
 if __name__ == '__main__':
   #------------------------
@@ -183,10 +236,14 @@ if __name__ == '__main__':
   parser.add_argument('--help', action='store_true', dest='h', default=0, help='Print this help')
   
   args = parser.parse_args()
-  if args.g!=0 or args.b!=0 or args.a!=0 or args.etc!=-1 or args.header!="":
+  if args.g!=0 or args.b!=0 or args.a!=0 or args.etc!="-1" or args.header!="" or args.input!=sys.stdin or args.output!=sys.stdout:
     if args.h == 1:
       print("Help with other attributes set! You failed!")
       sys.exit(90)
+  
+  if args.h == 1:
+    parser.print_help()
+    sys.exit(0)
   
   if args.b!=0 and args.etc!="-1":
     print("Attribute B set, and etc is set also... I don't like it!")
@@ -268,15 +325,20 @@ if __name__ == '__main__':
   #------------------------
   #+++++++++++ G Write +++++++++++++
   #------------------------
-
-  if not args.b and args.g:
+  if args.g:
+    parse_g_tree()
+    
     if args.header!="":
       fwrite(f_out,"--"+args.header)
       
-      
-  if args.b and args.g:
-    if args.header!="":
-      fwrite(f_out,"--"+args.header)
+    fwrite(f_out,"<tables>")
+    fwrite(f_out,"\n")
+    for key, value in parsed_g_tree.items():
+      fwrite(f_out,"\t<table name=\""+key+"\">\n\t")
+      for key2, value2 in parsed_g_tree[key].items():     
+        fwrite(f_out,"\t<relation to=\""+key2+"\" relation_type=\""+value2+"\" />\n\t")
+      fwrite(f_out,"</table>\n")
+    fwrite(f_out,"</tables>\n")  
   #------------------------
   #-------- G Write ----------
   #------------------------
