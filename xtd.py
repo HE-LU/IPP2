@@ -9,23 +9,29 @@ import xml.etree.ElementTree as ET
 #------------------- MODULES -------------------
 
 #------------------- GLOBALS -------------------
-type_values_table = {"NONE":0, "BIT":1, "INT":2, "FLOAT":3, "NTEXT":4, "NVARCHAR":4}
+type_values_table = {"NONE":0, "BIT":1, "INT":2, "FLOAT":3, "NVARCHAR":4, "NTEXT":5}
 parsed_tree = {}
 parsed_g_tree = {}
 counter_list = {}
 #------------------- GLOBALS -------------------
+
+def clear_white_chars(text):
+  if text == None:
+    return ""
+  tmp = text
+  tmp = ''.join(tmp.split())
+  return tmp
 
 #------------------- get_type -------------------
 def get_type(actual_type, text, attrib):
   
   if text == None:
     return "BIT"
-  tmp = text
-  tmp = ''.join(tmp.split())
-  if tmp == "":
+  if clear_white_chars(text) == "":
     return "INT"
   
-  new_type = "NONE"
+  #new_type = "NONE"
+  new_type = actual_type
   if text == 0 or text == 1 or text == "true" or text == "false"or text == "True" or text == "False":
     new_type = "BIT"
   elif is_int(text):
@@ -38,8 +44,8 @@ def get_type(actual_type, text, attrib):
   if attrib and new_type == "NTEXT":
     new_type = "NVARCHAR"
   
-  if text == "":
-    new_type = "INT"
+  #if text == "":
+    #new_type = "INT"
   
   if type_values_table[new_type] < type_values_table[actual_type]:
     new_type = actual_type
@@ -111,7 +117,11 @@ def parse_xml(root):
         parsed_tree[root.tag][atr][0] = 1
         parsed_tree[root.tag][atr][1] = get_type("NONE", atr_val, 1) # Numba one for attribute! Hurray!
         parsed_tree[root.tag][atr][2] = ""
-        
+   
+    if child.tag+"_id" in parsed_tree[root.tag]:
+      print("OMG WTF! NOOOOOOO!")
+      sys.exit(90)
+
     if child.tag not in parsed_tree[root.tag]:
       # -------------------- If child.tag is new.
       if child.tag in counter_list[root.tag]:
@@ -124,32 +134,41 @@ def parse_xml(root):
       parsed_tree[root.tag][child.tag][2] = "_id"
     else:
       # -------------------- If child.tag already exist, change number of them!
+
+      #if child.tag in counter_list[root.tag]: 
+        #counter_list[root.tag][child.tag] = counter_list[root.tag][child.tag] + 1    
+        #parsed_tree[root.tag][child.tag][0] = counter_list[root.tag][child.tag]
+      #else:
+        #parsed_tree[root.tag][child.tag][0] = 1
+        #counter_list[root.tag][child.tag] = 1
+        
       if child.tag in counter_list[root.tag]: 
         counter_list[root.tag][child.tag] = counter_list[root.tag][child.tag] + 1    
-        parsed_tree[root.tag][child.tag][0] = counter_list[root.tag][child.tag]
+        if parsed_tree[root.tag][child.tag][0] < counter_list[root.tag][child.tag]:
+          parsed_tree[root.tag][child.tag][0] = counter_list[root.tag][child.tag]
       else:
-        parsed_tree[root.tag][child.tag][0] = 1
         counter_list[root.tag][child.tag] = 1
-
+      
       parsed_tree[root.tag][child.tag][1] = "INT"
       parsed_tree[root.tag][child.tag][2] = "_id"
 
-      if parsed_tree[root.tag][child.tag][0] >= int(args.etc) and args.etc != "-1":
-        make_etc_elements(root.tag, child.tag)
+    if parsed_tree[root.tag][child.tag][0] > int(args.etc) and args.etc != "-1":
+      make_etc_elements(root.tag, child.tag)
   # ----------------------------------------
   # -------------------- If he dont have childs!
   # ----------------------------------------
   if not have_childs:
-    if root.text not in parsed_tree[root.tag]:
+    #if root.tag not in parsed_tree[root.tag] and clear_white_chars(root.text) != "":
+    if clear_white_chars(root.text) != "":
       # -------------------- Create new instance for root.tag, only if its empty!
       parsed_tree[root.tag]["value"]=[1,"NONE",""]
       parsed_tree[root.tag]["value"][0] = 1
       parsed_tree[root.tag]["value"][1] = get_type("NONE", root.text, 0) # 0 cuz not attribute
       parsed_tree[root.tag]["value"][2] = ""
-    else:
-      # -------------------- If root.tag already exist, check his type!
-      parsed_tree[root.tag][child.tag][1] = get_type("NONE", root.text, 0) # 0 cuz not attribute
-      parsed_tree[root.tag][child.tag][2] = "_id"
+    #else:
+      ## -------------------- If root.tag already exist, check his type!
+      #parsed_tree[root.tag][root.tag][1] = get_type("NONE", root.text, 0) # 0 cuz not attribute
+      #parsed_tree[root.tag][root.tag][2] = "_id"
     if not args.a:
       # -------------------- Now add all these attributes :)!
       for atr,atr_val in root.items():
@@ -216,6 +235,7 @@ def parse_g_tree():
     for child in parsed_g_tree[root]:
       if parsed_g_tree[root][child] == "0:0":
         parsed_g_tree[root][child] = "N:M"
+  
   return
 #------------------ PARSE_G_TREE -------------------
   
@@ -239,7 +259,7 @@ if __name__ == '__main__':
   if args.g!=0 or args.b!=0 or args.a!=0 or args.etc!="-1" or args.header!="" or args.input!=sys.stdin or args.output!=sys.stdout:
     if args.h == 1:
       print("Help with other attributes set! You failed!")
-      sys.exit(90)
+      sys.exit(1)
   
   if args.h == 1:
     parser.print_help()
@@ -247,11 +267,11 @@ if __name__ == '__main__':
   
   if args.b!=0 and args.etc!="-1":
     print("Attribute B set, and etc is set also... I don't like it!")
-    sys.exit(90)
+    sys.exit(1)
   
   if not is_int(args.etc):
     print("ETC is not a number!")
-    sys.exit(90)
+    sys.exit(666)
   
   #------------------------
   #---------- ARGS ---------
@@ -261,7 +281,11 @@ if __name__ == '__main__':
   #+++++++++++++ XML +++++++++++++
   #------------------------
   
-  tree = ET.parse(args.input)
+  try:
+    tree = ET.parse(args.input)
+  except:
+    print("Spatny vstpnisoubor, nebo se neco posralo")
+    sys.exit(2)
   root = tree.getroot()
 
   print("\n")
@@ -278,7 +302,11 @@ if __name__ == '__main__':
   #------------------------
   
   if args.output != sys.stdout:
-    f_out = open(args.output,"w")
+    try:
+      f_out = open(args.output,"w")
+    except:
+      print("ou ou fucking poh!")
+      sys.exit(3)
   else:
     f_out = None
   #------------------------
